@@ -5,6 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🌍 Flag Quiz</title>
 
+  <!--
+  ══════════════════════════════════════════════════
+  FIRESTORE RULES — paste these in Firebase Console
+  → Firestore Database → Rules
+  ══════════════════════════════════════════════════
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+      match /flagquiz_scores/{doc} {
+        allow read: if true;
+        allow write: if true;
+      }
+    }
+  }
+  ══════════════════════════════════════════════════
+  -->
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -153,6 +170,9 @@
   <script type="text/babel">
     const { useState, useEffect, useReducer, useRef, useCallback } = React;
 
+    /* ═══════════════════════════════════════════════
+       DATA — 65 countries
+    ═══════════════════════════════════════════════ */
     const COUNTRIES = [
       { name:"United Kingdom",       emoji:"🇬🇧" },
       { name:"France",               emoji:"🇫🇷" },
@@ -225,6 +245,9 @@
     const TIME       = 10;
     const COLLECTION = "flagquiz_scores";
 
+    /* ═══════════════════════════════════════════════
+       HELPERS
+    ═══════════════════════════════════════════════ */
     function shuffle(arr) {
       const a = [...arr];
       for (let i = a.length - 1; i > 0; i--) {
@@ -244,6 +267,49 @@
       }));
     }
 
+    /* ═══════════════════════════════════════════════
+       LONG-PRESS HOOK
+       Hold the 🏆 trophy for 1.5 s to refresh.
+       Looks like plain decoration to everyone else.
+    ═══════════════════════════════════════════════ */
+    function useLongPress(callback, ms = 1500) {
+      const timer = useRef(null);
+      const start  = useCallback(() => { timer.current = setTimeout(callback, ms); }, [callback, ms]);
+      const cancel = useCallback(() => { clearTimeout(timer.current); }, []);
+      return { onMouseDown:start, onMouseUp:cancel, onMouseLeave:cancel, onTouchStart:start, onTouchEnd:cancel };
+    }
+
+    /* ═══════════════════════════════════════════════
+       LEADERBOARD HEADER
+       Long-press the trophy to silently refresh.
+    ═══════════════════════════════════════════════ */
+    function LeaderboardHeader({ onRefresh, label }) {
+      const [flash, setFlash] = useState(false);
+      const lp = useLongPress(() => {
+        onRefresh();
+        setFlash(true);
+        setTimeout(() => setFlash(false), 800);
+      });
+
+      return (
+        <div style={{ textAlign:"center", fontSize:"0.7rem", letterSpacing:"0.12em",
+          textTransform:"uppercase", color:"#facc15", fontWeight:700, marginBottom:"0.6rem",
+          userSelect:"none" }}
+        >
+          <span
+            {...lp}
+            style={{ cursor:"default", transition:"opacity .2s", opacity: flash ? 0.35 : 1, display:"inline-block" }}
+          >
+            🏆
+          </span>
+          {" "}{label}
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════
+       REDUCER
+    ═══════════════════════════════════════════════ */
     const INIT = {
       screen:     "welcome",
       playerName: "",
@@ -256,7 +322,7 @@
       isCorrect:  null,
     };
 
-    /* Score = timeLeft × 10 (max 100) + streak bonus. Faster = more points. */
+    /* Score = timeLeft × 10 (max 100 if instant) + streak bonus */
     function applyAnswer(state, chosen) {
       const q        = state.questions[state.qIdx];
       const ok       = chosen !== null && chosen === q.correct.name;
@@ -278,7 +344,6 @@
         case "ANSWER":
           if (state.chosen !== null) return state;
           return applyAnswer(state, action.chosen);
-        /* Skip: no penalty, streak preserved, move on */
         case "SKIP":
           if (state.chosen !== null) return state;
           return { ...state, chosen: "⏭️", isCorrect: null };
@@ -293,8 +358,10 @@
       }
     }
 
-    /* ── Welcome ── */
-    function WelcomeScreen({ onStart, leaderboard, loading }) {
+    /* ═══════════════════════════════════════════════
+       WELCOME SCREEN
+    ═══════════════════════════════════════════════ */
+    function WelcomeScreen({ onStart, onRefresh, leaderboard, loading }) {
       const [name, setName] = useState("");
       const ok = name.trim().length > 0;
 
@@ -328,9 +395,7 @@
           </button>
 
           <div style={{ marginTop:"2rem", width:"100%", maxWidth:"300px" }}>
-            <div style={{ textAlign:"center", fontSize:"0.7rem", letterSpacing:"0.12em", textTransform:"uppercase", color:"#facc15", fontWeight:700, marginBottom:"0.6rem" }}>
-              🏆 Top Scores
-            </div>
+            <LeaderboardHeader onRefresh={onRefresh} label="Top Scores" />
             <div className="card">
               {loading ? (
                 <div style={{ textAlign:"center", color:"#6b7280", padding:"1.25rem", fontSize:"0.9rem" }}>Loading…</div>
@@ -351,7 +416,9 @@
       );
     }
 
-    /* ── Question ── */
+    /* ═══════════════════════════════════════════════
+       QUESTION SCREEN
+    ═══════════════════════════════════════════════ */
     function QuestionScreen({ state, onAnswer, onSkip }) {
       const { questions, qIdx, score, streak, timeLeft, chosen, isCorrect } = state;
       const q      = questions[qIdx];
@@ -415,7 +482,7 @@
             })}
           </div>
 
-          {/* Skip button — only visible before answering */}
+          {/* Skip — only visible before answering */}
           {chosen === null && (
             <button className="btn-skip" onClick={onSkip}>
               ⏭️ Skip this one
@@ -447,8 +514,10 @@
       );
     }
 
-    /* ── Game Over ── */
-    function GameOverScreen({ state, leaderboard, saving, onRestart }) {
+    /* ═══════════════════════════════════════════════
+       GAME OVER SCREEN
+    ═══════════════════════════════════════════════ */
+    function GameOverScreen({ state, onRefresh, leaderboard, saving, onRestart }) {
       const { score, playerName } = state;
       const pct = Math.round((score / (TOTAL * 100)) * 100);
       const [icon, msg] =
@@ -476,9 +545,7 @@
           )}
 
           <div style={{ width:"100%", marginTop:"1.25rem", marginBottom:"1.75rem" }}>
-            <div style={{ textAlign:"center", fontSize:"0.7rem", letterSpacing:"0.12em", textTransform:"uppercase", color:"#facc15", fontWeight:700, marginBottom:"0.6rem" }}>
-              🏆 Leaderboard
-            </div>
+            <LeaderboardHeader onRefresh={onRefresh} label="Leaderboard" />
             <div className="card">
               {leaderboard.length === 0 ? (
                 <div style={{ textAlign:"center", color:"#6b7280", padding:"1rem", fontSize:"0.9rem" }}>Loading…</div>
@@ -503,14 +570,17 @@
       );
     }
 
-    /* ── App ── */
+    /* ═══════════════════════════════════════════════
+       APP
+    ═══════════════════════════════════════════════ */
     function App() {
       const [gs, dispatch] = useReducer(reducer, INIT);
-      const [lb,         setLb]        = useState([]);
-      const [loadingLb,  setLoadingLb] = useState(true);
-      const [saving,     setSaving]    = useState(false);
+      const [lb,        setLb]        = useState([]);
+      const [loadingLb, setLoadingLb] = useState(true);
+      const [saving,    setSaving]    = useState(false);
       const savedRef = useRef(false);
 
+      /* Fade out loading overlay */
       useEffect(() => {
         const el = document.getElementById("loading");
         if (!el) return;
@@ -518,6 +588,7 @@
         setTimeout(() => el.remove(), 600);
       }, []);
 
+      /* Fetch leaderboard */
       const fetchLb = useCallback(() => {
         setLoadingLb(true);
         db.collection(COLLECTION)
@@ -530,29 +601,38 @@
 
       useEffect(() => { fetchLb(); }, [fetchLb]);
 
+      /* Timer tick */
       useEffect(() => {
         if (gs.screen !== "playing" || gs.chosen !== null) return;
         const id = setInterval(() => dispatch({ type:"TICK" }), 1000);
         return () => clearInterval(id);
       }, [gs.screen, gs.chosen, gs.qIdx]);
 
+      /* Auto-advance after answer */
       useEffect(() => {
         if (gs.screen !== "playing" || gs.chosen === null) return;
         const id = setTimeout(() => dispatch({ type:"NEXT" }), 1450);
         return () => clearTimeout(id);
       }, [gs.chosen, gs.screen]);
 
+      /* Save score on game over — one doc per player, best score only */
       useEffect(() => {
         if (gs.screen !== "gameover" || savedRef.current) return;
         savedRef.current = true;
         setSaving(true);
-        db.collection(COLLECTION).add({
-          name:      gs.playerName,
-          score:     gs.score,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        })
-        .then(() => { setSaving(false); fetchLb(); })
-        .catch(()  => setSaving(false));
+        const docRef = db.collection(COLLECTION).doc(gs.playerName);
+        docRef.get()
+          .then(doc => {
+            if (!doc.exists || doc.data().score < gs.score) {
+              return docRef.set({
+                name:      gs.playerName,
+                score:     gs.score,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+            }
+          })
+          .then(() => { setSaving(false); fetchLb(); })
+          .catch(()  => setSaving(false));
       }, [gs.screen]);
 
       const start   = useCallback(name   => { savedRef.current = false; dispatch({ type:"START",  name }); }, []);
@@ -562,9 +642,9 @@
 
       return (
         <div style={{ minHeight:"100vh", background:"linear-gradient(155deg,#0f172a 0%,#1e1b4b 55%,#0f172a 100%)" }}>
-          {gs.screen === "welcome"  && <WelcomeScreen  onStart={start}  leaderboard={lb} loading={loadingLb} />}
-          {gs.screen === "playing"  && <QuestionScreen state={gs}        onAnswer={answer} onSkip={skip} key={gs.qIdx} />}
-          {gs.screen === "gameover" && <GameOverScreen  state={gs}        leaderboard={lb} saving={saving} onRestart={restart} />}
+          {gs.screen === "welcome"  && <WelcomeScreen  onStart={start}  onRefresh={fetchLb} leaderboard={lb} loading={loadingLb} />}
+          {gs.screen === "playing"  && <QuestionScreen state={gs}        onAnswer={answer}   onSkip={skip}   key={gs.qIdx} />}
+          {gs.screen === "gameover" && <GameOverScreen  state={gs}        onRefresh={fetchLb} leaderboard={lb} saving={saving} onRestart={restart} />}
         </div>
       );
     }
