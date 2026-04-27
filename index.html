@@ -630,7 +630,17 @@
           .then(snap => { setLb(snap.docs.map(d => d.data())); setLoadingLb(false); })
           .catch(() => setLoadingLb(false));
       }, []);
-
+const wipeLeaderboard = useCallback(async () => {
+  try {
+    const snap = await db.collection(COLLECTION).get();
+    const batch = db.batch();
+    snap.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    fetchLb();
+  } catch (e) {
+    console.error("Wipe failed:", e);
+  }
+}, [fetchLb]);
       useEffect(() => { fetchLb(); }, [fetchLb]);
 
       /* Timer tick */
@@ -673,11 +683,11 @@
       const restart = useCallback(()     => { dispatch({ type:"RESET" }); fetchLb(); }, [fetchLb]);
 
       return (
-        <div style={{ minHeight:"100vh", background:"linear-gradient(155deg,#0f172a 0%,#1e1b4b 55%,#0f172a 100%)" }}>
-          {gs.screen === "welcome"  && <WelcomeScreen  onStart={start}  onRefresh={fetchLb} leaderboard={lb} loading={loadingLb} />}
-          {gs.screen === "playing"  && <QuestionScreen state={gs}        onAnswer={answer}   onSkip={skip}   key={gs.qIdx} />}
-          {gs.screen === "gameover" && <GameOverScreen  state={gs}        onRefresh={fetchLb} leaderboard={lb} saving={saving} onRestart={restart} />}
-        </div>
+  <div style={{ minHeight:"100vh", background:"linear-gradient(155deg,#0f172a 0%,#1e1b4b 55%,#0f172a 100%)" }}>
+    {gs.screen === "welcome"  && <WelcomeScreen  onStart={start}  onRefresh={wipeLeaderboard} leaderboard={lb} loading={loadingLb} />}
+    {gs.screen === "playing"  && <QuestionScreen state={gs}        onAnswer={answer}           onSkip={skip}   key={gs.qIdx} />}
+    {gs.screen === "gameover" && <GameOverScreen  state={gs}        onRefresh={wipeLeaderboard} leaderboard={lb} saving={saving} onRestart={restart} />}
+  </div>
       );
     }
 
