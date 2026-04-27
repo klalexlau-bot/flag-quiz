@@ -267,7 +267,6 @@
       }));
     }
 
-    /* ordinal suffix: 1 → "1st", 2 → "2nd", etc. */
     function ordinal(n) {
       const s = ["th","st","nd","rd"];
       const v = n % 100;
@@ -275,8 +274,7 @@
     }
 
     /* ═══════════════════════════════════════════════
-       LONG-PRESS HOOK  (FIX: onTouchCancel + clearTimeout guard)
-       Hold the 🏆 trophy for 1.5 s to refresh.
+       LONG-PRESS HOOK
     ═══════════════════════════════════════════════ */
     function useLongPress(callback, ms = 1500) {
       const timer = useRef(null);
@@ -539,22 +537,20 @@
     }
 
     /* ═══════════════════════════════════════════════
-       GAME OVER SCREEN  (FIX: icon/msg from actual rank)
+       GAME OVER SCREEN
     ═══════════════════════════════════════════════ */
     function GameOverScreen({ state, onRefresh, leaderboard, saving, onRestart }) {
       const { score, playerName } = state;
       const pct  = Math.round((score / (TOTAL * 100)) * 100);
 
-      /* Find player's actual rank in the loaded leaderboard (1-indexed, 0 = not found yet) */
       const rank = leaderboard.findIndex(e => e.name === playerName) + 1;
 
       let icon, msg;
-      if (rank === 1)    { icon = "🥇"; msg = "1st Place!"; }
+      if      (rank === 1) { icon = "🥇"; msg = "1st Place!"; }
       else if (rank === 2) { icon = "🥈"; msg = "2nd Place!"; }
       else if (rank === 3) { icon = "🥉"; msg = "3rd Place!"; }
-      else if (rank > 3)   { icon = "🎖️"; msg = `${ordinal(rank)} Place!`; }
+      else if (rank >  3)  { icon = "🎖️"; msg = `${ordinal(rank)} Place!`; }
       else {
-        /* Leaderboard still saving/loading — fall back to score-based */
         if      (pct >= 90) { icon = "🏆"; msg = "LEGENDARY!"; }
         else if (pct >= 70) { icon = "🥇"; msg = "Excellent!"; }
         else if (pct >= 50) { icon = "🥈"; msg = "Well done!"; }
@@ -623,8 +619,9 @@
         setTimeout(() => el.remove(), 600);
       }, []);
 
-      /* Fetch leaderboard */
+      /* ─── FIX: clear lb immediately so old rows vanish before new fetch arrives ─── */
       const fetchLb = useCallback(() => {
+        setLb([]);
         setLoadingLb(true);
         db.collection(COLLECTION)
           .orderBy("score", "desc")
