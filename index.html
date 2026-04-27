@@ -273,11 +273,21 @@
        Looks like plain decoration to everyone else.
     ═══════════════════════════════════════════════ */
     function useLongPress(callback, ms = 1500) {
-      const timer = useRef(null);
-      const start  = useCallback(() => { timer.current = setTimeout(callback, ms); }, [callback, ms]);
-      const cancel = useCallback(() => { clearTimeout(timer.current); }, []);
-      return { onMouseDown:start, onMouseUp:cancel, onMouseLeave:cancel, onTouchStart:start, onTouchEnd:cancel };
-    }
+  const timer = useRef(null);
+  const start = useCallback((e) => {
+    e.preventDefault();
+    timer.current = setTimeout(callback, ms);
+  }, [callback, ms]);
+  const cancel = useCallback(() => { clearTimeout(timer.current); }, []);
+  return {
+    onMouseDown:   start,
+    onMouseUp:     cancel,
+    onMouseLeave:  cancel,
+    onTouchStart:  start,
+    onTouchEnd:    cancel,
+    onContextMenu: (e) => e.preventDefault(),
+  };
+}
 
     /* ═══════════════════════════════════════════════
        LEADERBOARD HEADER
@@ -296,12 +306,20 @@
           textTransform:"uppercase", color:"#facc15", fontWeight:700, marginBottom:"0.6rem",
           userSelect:"none" }}
         >
-          <span
-            {...lp}
-            style={{ cursor:"default", transition:"opacity .2s", opacity: flash ? 0.35 : 1, display:"inline-block" }}
-          >
-            🏆
-          </span>
+         <span
+  {...lp}
+  style={{
+    cursor: "default",
+    transition: "opacity .2s",
+    opacity: flash ? 0.35 : 1,
+    display: "inline-block",
+    WebkitUserSelect: "none",
+    WebkitTouchCallout: "none",
+    userSelect: "none",
+  }}
+>
+  🏆
+</span>
           {" "}{label}
         </div>
       );
