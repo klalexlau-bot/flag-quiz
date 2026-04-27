@@ -3,27 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Flag Explorer</title>
+  <title>🌍 Flag Quiz</title>
 
-  <!-- Tailwind CSS -->
+  <!--
+  ══════════════════════════════════════════════════
+  FIRESTORE RULES — paste these in Firebase Console
+  → Firestore Database → Rules
+  ══════════════════════════════════════════════════
+  rules_version = '2';
+  service cloud.firestore {
+    match /databases/{database}/documents {
+      match /flagquiz_scores/{doc} {
+        allow read: if true;
+        allow write: if true;
+      }
+    }
+  }
+  ══════════════════════════════════════════════════
+  -->
+
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- React -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
-  <!-- Framer Motion -->
-  <script src="https://unpkg.com/framer-motion@11/dist/framer-motion.js"></script>
-
-  <!-- Firebase SDKs via CDN -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-
-  <!-- Babel (transpiles JSX in the browser) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-  <!-- Firebase init — plain script, NOT Babel -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyCOYba-qu_UqubB1Rwi3B1YmmltSRzhoZs",
@@ -32,27 +37,561 @@
       storageBucket: "aiden-birthday-2026.firebasestorage.app",
       messagingSenderId: "901299579099",
       appId: "1:901299579099:web:30ee95cd659f5bf8ce84fe"
-};
+    };
     firebase.initializeApp(firebaseConfig);
-    const db   = firebase.firestore();
-    const auth = firebase.auth();
+    const db = firebase.firestore();
   </script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0f172a; font-family: system-ui, sans-serif; }
+
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(52px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes popIn {
+      0%   { opacity: 0; transform: scale(0.3) rotate(-12deg); }
+      65%  { transform: scale(1.15) rotate(4deg); }
+      100% { opacity: 1; transform: scale(1) rotate(0deg); }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.82); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes blink {
+      0%,100% { opacity:1; } 50% { opacity:0.4; }
+    }
+    @keyframes confetti {
+      0%   { transform: translateY(0) rotate(0deg); opacity:1; }
+      100% { transform: translateY(80px) rotate(720deg); opacity:0; }
+    }
+
+    .anim-slide  { animation: slideInRight 0.28s cubic-bezier(.34,1.5,.64,1) both; }
+    .anim-up     { animation: fadeInUp 0.32s ease both; }
+    .anim-pop    { animation: popIn 0.42s cubic-bezier(.34,1.56,.64,1) both; }
+    .anim-scale  { animation: scaleIn 0.38s cubic-bezier(.34,1.4,.64,1) both; }
+    .anim-blink  { animation: blink 1.4s ease infinite; }
+
+    .card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .card-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .card-row:last-child { border-bottom: none; }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .chip-yellow { background:rgba(234,179,8,.18); border:1px solid rgba(234,179,8,.3); color:#facc15; }
+    .chip-orange { background:rgba(249,115,22,.18); border:1px solid rgba(249,115,22,.35); color:#fb923c; }
+
+    .btn-primary {
+      display:block; width:100%; max-width:300px;
+      padding: 0.9rem 1.5rem; border-radius:1rem; border:none; cursor:pointer;
+      background: linear-gradient(135deg,#3b82f6,#7c3aed);
+      color:white; font-weight:900; font-size:1.2rem;
+      box-shadow: 0 8px 28px rgba(59,130,246,.35);
+      transition: transform .15s, box-shadow .15s;
+    }
+    .btn-primary:hover  { transform:scale(1.05); box-shadow:0 10px 32px rgba(59,130,246,.45); }
+    .btn-primary:active { transform:scale(0.96); }
+    .btn-primary:disabled { background:rgba(255,255,255,.1); color:#6b7280; box-shadow:none; cursor:not-allowed; transform:none; }
+
+    .choice {
+      padding:0.9rem 0.6rem;
+      border-radius:0.9rem;
+      border: 2px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.09);
+      color: white; font-weight:600; font-size:0.85rem;
+      cursor:pointer;
+      transition: transform .12s, background .18s, border-color .18s, color .18s, opacity .18s;
+      text-align:center;
+    }
+    .choice:hover:not(:disabled) { transform:scale(1.05); background:rgba(255,255,255,.16); }
+    .choice:active:not(:disabled){ transform:scale(0.95); }
+    .choice:disabled { cursor:default; }
+    .choice.correct  { background:rgba(34,197,94,.22); border-color:#22c55e; color:#bbf7d0; }
+    .choice.wrong    { background:rgba(239,68,68,.22); border-color:#ef4444; color:#fecaca; }
+    .choice.faded    { background:rgba(255,255,255,.04); border-color:rgba(255,255,255,.08); color:#4b5563; opacity:.7; }
+
+    .grad-text {
+      background: linear-gradient(120deg,#60a5fa,#a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    input.name-input {
+      width:100%; padding:.75rem 1.2rem;
+      border-radius:0.9rem; border:2px solid rgba(255,255,255,.2);
+      background:rgba(255,255,255,.09); color:white;
+      font-size:1.1rem; font-weight:600; text-align:center;
+      outline:none; transition: border-color .2s;
+    }
+    input.name-input::placeholder { color:#6b7280; }
+    input.name-input:focus { border-color:#60a5fa; }
+  </style>
 </head>
 <body>
+
+  <!-- Shown while Babel + Firebase loads -->
+  <div id="loading" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0f172a;color:white;font-size:1.5rem;z-index:999;transition:opacity .5s;">
+    <div style="font-size:4rem;margin-bottom:.5rem;">🌍</div>
+    Loading…
+  </div>
+
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState } = React;
-    const { motion, AnimatePresence } = window.FramerMotion;
+    const { useState, useEffect, useReducer, useRef, useCallback } = React;
 
-    // ── PASTE YOUR FlagQuiz COMPONENT HERE ──────────────────────────────
-    // Remove only these two lines from the top of the component:
-    //   import React from 'react';
-    //   import { motion, AnimatePresence } from 'framer-motion';
-    // Everything else stays exactly as-is.
-    // ─────────────────────────────────────────────────────────────────────
+    /* ═══════════════════════════════════════════════
+       DATA  — 65 countries
+    ═══════════════════════════════════════════════ */
+    const COUNTRIES = [
+      // Europe
+      { name:"United Kingdom",       emoji:"🇬🇧" },
+      { name:"France",               emoji:"🇫🇷" },
+      { name:"Germany",              emoji:"🇩🇪" },
+      { name:"Italy",                emoji:"🇮🇹" },
+      { name:"Spain",                emoji:"🇪🇸" },
+      { name:"Portugal",             emoji:"🇵🇹" },
+      { name:"Netherlands",          emoji:"🇳🇱" },
+      { name:"Belgium",              emoji:"🇧🇪" },
+      { name:"Switzerland",          emoji:"🇨🇭" },
+      { name:"Austria",              emoji:"🇦🇹" },
+      { name:"Sweden",               emoji:"🇸🇪" },
+      { name:"Norway",               emoji:"🇳🇴" },
+      { name:"Denmark",              emoji:"🇩🇰" },
+      { name:"Finland",              emoji:"🇫🇮" },
+      { name:"Poland",               emoji:"🇵🇱" },
+      { name:"Greece",               emoji:"🇬🇷" },
+      { name:"Ukraine",              emoji:"🇺🇦" },
+      { name:"Romania",              emoji:"🇷🇴" },
+      { name:"Hungary",              emoji:"🇭🇺" },
+      { name:"Czech Republic",       emoji:"🇨🇿" },
+      { name:"Croatia",              emoji:"🇭🇷" },
+      { name:"Ireland",              emoji:"🇮🇪" },
+      { name:"Russia",               emoji:"🇷🇺" },
+      { name:"Turkey",               emoji:"🇹🇷" },
+      // Americas
+      { name:"United States",        emoji:"🇺🇸" },
+      { name:"Canada",               emoji:"🇨🇦" },
+      { name:"Brazil",               emoji:"🇧🇷" },
+      { name:"Mexico",               emoji:"🇲🇽" },
+      { name:"Argentina",            emoji:"🇦🇷" },
+      { name:"Colombia",             emoji:"🇨🇴" },
+      { name:"Chile",                emoji:"🇨🇱" },
+      { name:"Peru",                 emoji:"🇵🇪" },
+      { name:"Venezuela",            emoji:"🇻🇪" },
+      { name:"Cuba",                 emoji:"🇨🇺" },
+      { name:"Jamaica",              emoji:"🇯🇲" },
+      // Asia
+      { name:"Japan",                emoji:"🇯🇵" },
+      { name:"China",                emoji:"🇨🇳" },
+      { name:"South Korea",          emoji:"🇰🇷" },
+      { name:"India",                emoji:"🇮🇳" },
+      { name:"Indonesia",            emoji:"🇮🇩" },
+      { name:"Malaysia",             emoji:"🇲🇾" },
+      { name:"Thailand",             emoji:"🇹🇭" },
+      { name:"Vietnam",              emoji:"🇻🇳" },
+      { name:"Philippines",          emoji:"🇵🇭" },
+      { name:"Pakistan",             emoji:"🇵🇰" },
+      { name:"Bangladesh",           emoji:"🇧🇩" },
+      { name:"Singapore",            emoji:"🇸🇬" },
+      { name:"Nepal",                emoji:"🇳🇵" },
+      { name:"Sri Lanka",            emoji:"🇱🇰" },
+      { name:"Cambodia",             emoji:"🇰🇭" },
+      { name:"Mongolia",             emoji:"🇲🇳" },
+      // Middle East
+      { name:"Saudi Arabia",         emoji:"🇸🇦" },
+      { name:"United Arab Emirates", emoji:"🇦🇪" },
+      { name:"Israel",               emoji:"🇮🇱" },
+      { name:"Iran",                 emoji:"🇮🇷" },
+      // Africa
+      { name:"South Africa",         emoji:"🇿🇦" },
+      { name:"Egypt",                emoji:"🇪🇬" },
+      { name:"Nigeria",              emoji:"🇳🇬" },
+      { name:"Kenya",                emoji:"🇰🇪" },
+      { name:"Morocco",              emoji:"🇲🇦" },
+      { name:"Ghana",                emoji:"🇬🇭" },
+      { name:"Ethiopia",             emoji:"🇪🇹" },
+      { name:"Tanzania",             emoji:"🇹🇿" },
+      // Oceania
+      { name:"Australia",            emoji:"🇦🇺" },
+      { name:"New Zealand",          emoji:"🇳🇿" },
+    ];
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<FlagQuiz />);
+    const TOTAL      = 10;   // questions per round
+    const TIME       = 10;   // seconds per question
+    const COLLECTION = "flagquiz_scores";
+
+    /* ═══════════════════════════════════════════════
+       HELPERS
+    ═══════════════════════════════════════════════ */
+    function shuffle(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function buildQuestions() {
+      return shuffle(COUNTRIES).slice(0, TOTAL).map(correct => ({
+        correct,
+        options: shuffle([
+          correct,
+          ...shuffle(COUNTRIES.filter(c => c.name !== correct.name)).slice(0, 3)
+        ]),
+      }));
+    }
+
+    /* ═══════════════════════════════════════════════
+       REDUCER
+    ═══════════════════════════════════════════════ */
+    const INIT = {
+      screen:     "welcome",   // "welcome" | "playing" | "gameover"
+      playerName: "",
+      questions:  [],
+      qIdx:       0,
+      score:      0,
+      streak:     0,
+      timeLeft:   TIME,
+      chosen:     null,        // null | string answer | "⏰"
+      isCorrect:  null,
+    };
+
+    function applyAnswer(state, chosen) {
+      const q       = state.questions[state.qIdx];
+      const ok      = chosen !== null && chosen === q.correct.name;
+      const newStr  = ok ? state.streak + 1 : 0;
+      const bonus   = ok ? Math.max(0, newStr - 1) * 10 : 0;
+      const newSc   = ok ? state.score + 100 + bonus : state.score;
+      return { ...state, chosen: chosen ?? "⏰", isCorrect: ok, streak: newStr, score: newSc };
+    }
+
+    function reducer(state, action) {
+      switch (action.type) {
+        case "START":
+          return { ...INIT, screen:"playing", playerName:action.name, questions:buildQuestions(), timeLeft:TIME };
+        case "TICK":
+          if (state.screen !== "playing" || state.chosen !== null) return state;
+          if (state.timeLeft <= 1) return applyAnswer(state, null);
+          return { ...state, timeLeft: state.timeLeft - 1 };
+        case "ANSWER":
+          if (state.chosen !== null) return state;
+          return applyAnswer(state, action.chosen);
+        case "NEXT": {
+          const next = state.qIdx + 1;
+          return next >= TOTAL
+            ? { ...state, screen:"gameover" }
+            : { ...state, qIdx:next, chosen:null, isCorrect:null, timeLeft:TIME };
+        }
+        case "RESET": return INIT;
+        default: return state;
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       WELCOME SCREEN
+    ═══════════════════════════════════════════════ */
+    function WelcomeScreen({ onStart, leaderboard, loading }) {
+      const [name, setName] = useState("");
+      const ok = name.trim().length > 0;
+
+      return (
+        <div className="anim-up" style={{ display:"flex", flexDirection:"column", alignItems:"center", minHeight:"100vh", padding:"0 1.25rem 2.5rem", color:"white" }}>
+          <div style={{ fontSize:"5.5rem", marginTop:"3rem", lineHeight:1 }}>🌍</div>
+          <h1 className="grad-text" style={{ margin:"0.5rem 0 0", fontSize:"2.8rem", fontWeight:900, letterSpacing:"-1px" }}>Flag Quiz</h1>
+          <p style={{ color:"#94a3b8", marginTop:"0.4rem", textAlign:"center", fontSize:"0.95rem" }}>
+            10 flags · 10 seconds each · streak bonuses!
+          </p>
+
+          <input
+            className="name-input"
+            autoFocus
+            type="text"
+            maxLength={20}
+            placeholder="Enter your name…"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && ok && onStart(name.trim())}
+            style={{ marginTop:"2rem", maxWidth:"300px" }}
+          />
+
+          <button
+            className="btn-primary"
+            style={{ marginTop:"0.75rem" }}
+            disabled={!ok}
+            onClick={() => ok && onStart(name.trim())}
+          >
+            Let's Play 🚀
+          </button>
+
+          {/* Leaderboard */}
+          <div style={{ marginTop:"2rem", width:"100%", maxWidth:"300px" }}>
+            <div style={{ textAlign:"center", fontSize:"0.7rem", letterSpacing:"0.12em", textTransform:"uppercase", color:"#facc15", fontWeight:700, marginBottom:"0.6rem" }}>
+              🏆 Top Scores
+            </div>
+            <div className="card">
+              {loading ? (
+                <div style={{ textAlign:"center", color:"#6b7280", padding:"1.25rem", fontSize:"0.9rem" }}>Loading…</div>
+              ) : leaderboard.length === 0 ? (
+                <div style={{ textAlign:"center", color:"#6b7280", padding:"1.25rem", fontSize:"0.9rem" }}>No scores yet — be the first!</div>
+              ) : leaderboard.map((e, i) => (
+                <div className="card-row" key={i}>
+                  <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", minWidth:0 }}>
+                    <span>{["🥇","🥈","🥉"][i] ?? `${i+1}.`}</span>
+                    <span style={{ color:"white", fontSize:"0.88rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{e.name}</span>
+                  </div>
+                  <span style={{ color:"#facc15", fontWeight:700, fontSize:"0.88rem", flexShrink:0, marginLeft:"0.75rem" }}>{e.score}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════
+       QUESTION SCREEN
+    ═══════════════════════════════════════════════ */
+    function QuestionScreen({ state, onAnswer }) {
+      const { questions, qIdx, score, streak, timeLeft, chosen, isCorrect } = state;
+      const q       = questions[qIdx];
+      const pct     = (timeLeft / TIME) * 100;
+      const barClr  = pct > 60 ? "#22c55e" : pct > 30 ? "#eab308" : "#ef4444";
+      const earnPts = isCorrect ? 100 + Math.max(0, streak - 1) * 10 : 0;
+
+      return (
+        <div className="anim-slide" style={{ display:"flex", flexDirection:"column", alignItems:"center", minHeight:"100vh", padding:"0 1.25rem 2rem", color:"white", maxWidth:"380px", margin:"0 auto" }}>
+
+          {/* ── Header ── */}
+          <div style={{ width:"100%", display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:"1.5rem", marginBottom:"0.6rem" }}>
+            <span style={{ color:"#94a3b8", fontSize:"0.9rem" }}>
+              <strong style={{ color:"white", fontSize:"1.05rem" }}>{qIdx + 1}</strong>/{TOTAL}
+            </span>
+            <div style={{ display:"flex", gap:"0.4rem", alignItems:"center" }}>
+              {streak >= 2 && (
+                <span className="chip chip-orange">🔥 {streak}x</span>
+              )}
+              <span className="chip chip-yellow">{score} pts</span>
+            </div>
+          </div>
+
+          {/* ── Timer bar ── */}
+          <div style={{ width:"100%", height:"6px", borderRadius:"999px", background:"rgba(255,255,255,.1)", overflow:"hidden", marginBottom:"1.75rem" }}>
+            <div style={{
+              height:"100%", borderRadius:"999px",
+              width:`${pct}%`, backgroundColor:barClr,
+              transition:"width 1s linear, background-color 0.3s",
+            }} />
+          </div>
+
+          {/* ── Flag ── */}
+          <div key={qIdx} className="anim-pop" style={{ fontSize:"6rem", lineHeight:1.15, userSelect:"none", textAlign:"center" }}>
+            {q.correct.emoji}
+          </div>
+
+          <p style={{ color:"#94a3b8", fontSize:"0.85rem", margin:"0.5rem 0 1.4rem" }}>
+            Which country does this flag belong to?
+          </p>
+
+          {/* ── Choices ── */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0.65rem", width:"100%" }}>
+            {q.options.map(opt => {
+              let cls = "";
+              if (chosen !== null) {
+                if (opt.name === q.correct.name) cls = "correct";
+                else if (opt.name === chosen)    cls = "wrong";
+                else                             cls = "faded";
+              }
+              return (
+                <button
+                  key={opt.name}
+                  className={`choice ${cls}`}
+                  disabled={chosen !== null}
+                  onClick={() => onAnswer(opt.name)}
+                >
+                  {opt.name}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ── Feedback ── */}
+          {chosen !== null && (
+            <div className="anim-up" style={{ marginTop:"1.5rem", textAlign:"center", fontSize:"1.05rem", fontWeight:700 }}>
+              {isCorrect
+                ? <span style={{ color:"#4ade80" }}>
+                    ✅ +{earnPts} pts{streak >= 2 ? " · 🔥 combo!" : ""}
+                  </span>
+                : chosen === "⏰"
+                  ? <span style={{ color:"#94a3b8" }}>
+                      ⏰ Time's up! → <span style={{ color:"white" }}>{q.correct.name}</span>
+                    </span>
+                  : <span style={{ color:"#f87171" }}>
+                      ❌ It's <span style={{ color:"white" }}>{q.correct.name}</span>
+                    </span>
+              }
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════
+       GAME OVER SCREEN
+    ═══════════════════════════════════════════════ */
+    function GameOverScreen({ state, leaderboard, saving, onRestart }) {
+      const { score, playerName } = state;
+      const pct = Math.round((score / (TOTAL * 100)) * 100);
+      const [icon, msg] =
+        pct >= 90 ? ["🏆", "LEGENDARY!"]
+        : pct >= 70 ? ["🥇", "Excellent!"]
+        : pct >= 50 ? ["🥈", "Well done!"]
+        : pct >= 30 ? ["🥉", "Keep it up!"]
+        : ["😅", "Practice more!"];
+
+      return (
+        <div className="anim-scale" style={{ display:"flex", flexDirection:"column", alignItems:"center", minHeight:"100vh", padding:"0 1.5rem 2.5rem", color:"white", maxWidth:"380px", margin:"0 auto" }}>
+          <div style={{ fontSize:"5rem", marginTop:"3.5rem" }}>{icon}</div>
+          <h2 style={{ margin:"0.5rem 0 0", fontSize:"2.2rem", fontWeight:900 }}>{msg}</h2>
+          <p style={{ color:"#94a3b8", marginTop:"0.25rem", fontSize:"1.05rem" }}>{playerName}</p>
+
+          <div style={{ fontSize:"4rem", fontWeight:900, color:"#facc15", marginTop:"0.75rem", lineHeight:1 }}>
+            {score}
+          </div>
+          <p style={{ color:"#64748b", fontSize:"0.85rem", marginBottom:"0.5rem" }}>points</p>
+
+          {saving && (
+            <p className="anim-blink" style={{ color:"#60a5fa", fontSize:"0.78rem", marginBottom:"0.5rem" }}>
+              💾 Saving to leaderboard…
+            </p>
+          )}
+
+          {/* Leaderboard */}
+          <div style={{ width:"100%", marginTop:"1.25rem", marginBottom:"1.75rem" }}>
+            <div style={{ textAlign:"center", fontSize:"0.7rem", letterSpacing:"0.12em", textTransform:"uppercase", color:"#facc15", fontWeight:700, marginBottom:"0.6rem" }}>
+              🏆 Leaderboard
+            </div>
+            <div className="card">
+              {leaderboard.length === 0 ? (
+                <div style={{ textAlign:"center", color:"#6b7280", padding:"1rem", fontSize:"0.9rem" }}>Loading…</div>
+              ) : leaderboard.map((e, i) => (
+                <div className="card-row" key={i} style={{ background: e.name === playerName ? "rgba(234,179,8,.06)" : "transparent" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", minWidth:0 }}>
+                    <span>{["🥇","🥈","🥉"][i] ?? `${i+1}.`}</span>
+                    <span style={{
+                      fontSize:"0.88rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                      color: e.name === playerName ? "#fde047" : "white",
+                      fontWeight: e.name === playerName ? 700 : 400,
+                    }}>{e.name}</span>
+                  </div>
+                  <span style={{ color:"#facc15", fontWeight:700, fontSize:"0.88rem", flexShrink:0, marginLeft:"0.75rem" }}>{e.score}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button className="btn-primary" onClick={onRestart}>Play Again 🔄</button>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════════
+       APP — ties everything together
+    ═══════════════════════════════════════════════ */
+    function App() {
+      const [gs, dispatch] = useReducer(reducer, INIT);
+      const [lb,         setLb]       = useState([]);
+      const [loadingLb,  setLoadingLb]= useState(true);
+      const [saving,     setSaving]   = useState(false);
+      const savedRef = useRef(false);
+
+      /* -- fade out loading overlay -- */
+      useEffect(() => {
+        const el = document.getElementById("loading");
+        if (!el) return;
+        el.style.opacity = "0";
+        setTimeout(() => el.remove(), 600);
+      }, []);
+
+      /* -- fetch leaderboard -- */
+      const fetchLb = useCallback(() => {
+        setLoadingLb(true);
+        db.collection(COLLECTION)
+          .orderBy("score", "desc")
+          .limit(10)
+          .get()
+          .then(snap => { setLb(snap.docs.map(d => d.data())); setLoadingLb(false); })
+          .catch(() => setLoadingLb(false));
+      }, []);
+
+      useEffect(() => { fetchLb(); }, [fetchLb]);
+
+      /* -- timer tick -- */
+      useEffect(() => {
+        if (gs.screen !== "playing" || gs.chosen !== null) return;
+        const id = setInterval(() => dispatch({ type:"TICK" }), 1000);
+        return () => clearInterval(id);
+      }, [gs.screen, gs.chosen, gs.qIdx]);
+
+      /* -- auto-advance after answer -- */
+      useEffect(() => {
+        if (gs.screen !== "playing" || gs.chosen === null) return;
+        const id = setTimeout(() => dispatch({ type:"NEXT" }), 1450);
+        return () => clearTimeout(id);
+      }, [gs.chosen, gs.screen]);
+
+      /* -- save score on game over -- */
+      useEffect(() => {
+        if (gs.screen !== "gameover" || savedRef.current) return;
+        savedRef.current = true;
+        setSaving(true);
+        db.collection(COLLECTION).add({
+          name:      gs.playerName,
+          score:     gs.score,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        })
+        .then(() => { setSaving(false); fetchLb(); })
+        .catch(()  => setSaving(false));
+      }, [gs.screen]);
+
+      const start   = useCallback(name  => { savedRef.current = false; dispatch({ type:"START", name }); }, []);
+      const answer  = useCallback(chosen => dispatch({ type:"ANSWER", chosen }), []);
+      const restart = useCallback(() => { dispatch({ type:"RESET" }); fetchLb(); }, [fetchLb]);
+
+      return (
+        <div style={{ minHeight:"100vh", background:"linear-gradient(155deg,#0f172a 0%,#1e1b4b 55%,#0f172a 100%)" }}>
+          {gs.screen === "welcome"  && <WelcomeScreen  onStart={start}   leaderboard={lb}    loading={loadingLb} />}
+          {gs.screen === "playing"  && <QuestionScreen state={gs}         onAnswer={answer}                       key={gs.qIdx} />}
+          {gs.screen === "gameover" && <GameOverScreen  state={gs}         leaderboard={lb}    saving={saving}    onRestart={restart} />}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 </body>
 </html>
