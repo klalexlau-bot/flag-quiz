@@ -267,31 +267,38 @@
       }));
     }
 
+    /* ordinal suffix: 1 → "1st", 2 → "2nd", etc. */
+    function ordinal(n) {
+      const s = ["th","st","nd","rd"];
+      const v = n % 100;
+      return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+
     /* ═══════════════════════════════════════════════
-       LONG-PRESS HOOK
+       LONG-PRESS HOOK  (FIX: onTouchCancel + clearTimeout guard)
        Hold the 🏆 trophy for 1.5 s to refresh.
-       Looks like plain decoration to everyone else.
     ═══════════════════════════════════════════════ */
     function useLongPress(callback, ms = 1500) {
-  const timer = useRef(null);
-  const start = useCallback((e) => {
-    e.preventDefault();
-    timer.current = setTimeout(callback, ms);
-  }, [callback, ms]);
-  const cancel = useCallback(() => { clearTimeout(timer.current); }, []);
-  return {
-    onMouseDown:   start,
-    onMouseUp:     cancel,
-    onMouseLeave:  cancel,
-    onTouchStart:  start,
-    onTouchEnd:    cancel,
-    onContextMenu: (e) => e.preventDefault(),
-  };
-}
+      const timer = useRef(null);
+      const start = useCallback((e) => {
+        e.preventDefault();
+        clearTimeout(timer.current);
+        timer.current = setTimeout(callback, ms);
+      }, [callback, ms]);
+      const cancel = useCallback(() => { clearTimeout(timer.current); }, []);
+      return {
+        onMouseDown:   start,
+        onMouseUp:     cancel,
+        onMouseLeave:  cancel,
+        onTouchStart:  start,
+        onTouchEnd:    cancel,
+        onTouchCancel: cancel,
+        onContextMenu: (e) => e.preventDefault(),
+      };
+    }
 
     /* ═══════════════════════════════════════════════
        LEADERBOARD HEADER
-       Long-press the trophy to silently refresh.
     ═══════════════════════════════════════════════ */
     function LeaderboardHeader({ onRefresh, label }) {
       const [flash, setFlash] = useState(false);
@@ -306,20 +313,20 @@
           textTransform:"uppercase", color:"#facc15", fontWeight:700, marginBottom:"0.6rem",
           userSelect:"none" }}
         >
-         <span
-  {...lp}
-  style={{
-    cursor: "default",
-    transition: "opacity .2s",
-    opacity: flash ? 0.35 : 1,
-    display: "inline-block",
-    WebkitUserSelect: "none",
-    WebkitTouchCallout: "none",
-    userSelect: "none",
-  }}
->
-  🏆
-</span>
+          <span
+            {...lp}
+            style={{
+              cursor: "default",
+              transition: "opacity .2s",
+              opacity: flash ? 0.35 : 1,
+              display: "inline-block",
+              WebkitUserSelect: "none",
+              WebkitTouchCallout: "none",
+              userSelect: "none",
+            }}
+          >
+            🏆
+          </span>
           {" "}{label}
         </div>
       );
@@ -340,7 +347,6 @@
       isCorrect:  null,
     };
 
-    /* Score = timeLeft × 10 (max 100 if instant) + streak bonus */
     function applyAnswer(state, chosen) {
       const q        = state.questions[state.qIdx];
       const ok       = chosen !== null && chosen === q.correct.name;
@@ -500,7 +506,7 @@
             })}
           </div>
 
-          {/* Skip — only visible before answering */}
+          {/* Skip */}
           {chosen === null && (
             <button className="btn-skip" onClick={onSkip}>
               ⏭️ Skip this one
@@ -533,17 +539,28 @@
     }
 
     /* ═══════════════════════════════════════════════
-       GAME OVER SCREEN
+       GAME OVER SCREEN  (FIX: icon/msg from actual rank)
     ═══════════════════════════════════════════════ */
     function GameOverScreen({ state, onRefresh, leaderboard, saving, onRestart }) {
       const { score, playerName } = state;
-      const pct = Math.round((score / (TOTAL * 100)) * 100);
-      const [icon, msg] =
-        pct >= 90 ? ["🏆", "LEGENDARY!"]
-        : pct >= 70 ? ["🥇", "Excellent!"]
-        : pct >= 50 ? ["🥈", "Well done!"]
-        : pct >= 30 ? ["🥉", "Keep it up!"]
-        : ["😅", "Practice more!"];
+      const pct  = Math.round((score / (TOTAL * 100)) * 100);
+
+      /* Find player's actual rank in the loaded leaderboard (1-indexed, 0 = not found yet) */
+      const rank = leaderboard.findIndex(e => e.name === playerName) + 1;
+
+      let icon, msg;
+      if (rank === 1)    { icon = "🥇"; msg = "1st Place!"; }
+      else if (rank === 2) { icon = "🥈"; msg = "2nd Place!"; }
+      else if (rank === 3) { icon = "🥉"; msg = "3rd Place!"; }
+      else if (rank > 3)   { icon = "🎖️"; msg = `${ordinal(rank)} Place!`; }
+      else {
+        /* Leaderboard still saving/loading — fall back to score-based */
+        if      (pct >= 90) { icon = "🏆"; msg = "LEGENDARY!"; }
+        else if (pct >= 70) { icon = "🥇"; msg = "Excellent!"; }
+        else if (pct >= 50) { icon = "🥈"; msg = "Well done!"; }
+        else if (pct >= 30) { icon = "🥉"; msg = "Keep it up!"; }
+        else                { icon = "😅"; msg = "Practice more!"; }
+      }
 
       return (
         <div className="anim-scale" style={{ display:"flex", flexDirection:"column", alignItems:"center", minHeight:"100vh", padding:"0 1.5rem 2.5rem", color:"white", maxWidth:"380px", margin:"0 auto" }}>
@@ -653,7 +670,7 @@
           .catch(()  => setSaving(false));
       }, [gs.screen]);
 
-      const start   = useCallback(name   => { savedRef.current = false; dispatch({ type:"START",  name }); }, []);
+      const start   = useCallback(name   => { savedRef.current = false; dispatch({ type:"START", name }); }, []);
       const answer  = useCallback(chosen => dispatch({ type:"ANSWER", chosen }), []);
       const skip    = useCallback(()     => dispatch({ type:"SKIP" }), []);
       const restart = useCallback(()     => { dispatch({ type:"RESET" }); fetchLb(); }, [fetchLb]);
